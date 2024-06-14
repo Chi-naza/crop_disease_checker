@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:google_mlkit_image_labeling/google_mlkit_image_labeling.dart';
 import 'package:image_picker/image_picker.dart';
 
 void main() {
@@ -36,9 +37,21 @@ class _CaptureScreenState extends State<CaptureScreen> {
   File? _image;
   late ImagePicker imagePicker;
 
+  late ImageLabeler imageLabeler;
+
+  String result = "";
+
   @override
   void initState() {
+    // init image picker
     imagePicker = ImagePicker();
+
+    // init image labeler
+    final ImageLabelerOptions options =
+        ImageLabelerOptions(confidenceThreshold: 0.5);
+
+    imageLabeler = ImageLabeler(options: options);
+
     super.initState();
   }
 
@@ -129,6 +142,29 @@ class _CaptureScreenState extends State<CaptureScreen> {
                           ),
                           const SizedBox(height: 10),
                           const Text(
+                            'Prediction',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          Padding(
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 8.0),
+                            child: Text(
+                              result,
+                              textAlign: TextAlign.center,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: Colors.green,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 15),
+                          const Text(
                             'Image',
                             style: TextStyle(
                               fontSize: 20,
@@ -188,6 +224,26 @@ class _CaptureScreenState extends State<CaptureScreen> {
       setState(() {
         _image = File(image!.path);
       });
+      doImageLabeling(_image!);
+    }
+  }
+
+  // do image labelling
+  Future<void> doImageLabeling(File image) async {
+    final InputImage inputImage = InputImage.fromFile(image);
+
+    final List<ImageLabel> labels = await imageLabeler.processImage(inputImage);
+
+    for (ImageLabel label in labels) {
+      final String text = label.label;
+      final int index = label.index;
+      final double confidence = label.confidence;
+
+      setState(() {
+        result =
+            "(NAME: $text, Confidence: ${confidence.toStringAsFixed(2)})\n";
+      });
+      print(result);
     }
   }
 }
