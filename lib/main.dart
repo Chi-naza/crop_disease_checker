@@ -1,8 +1,14 @@
 import 'dart:io';
+import 'package:crop_health_checker/widgets/text_n_value_widget.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:google_mlkit_image_labeling/google_mlkit_image_labeling.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path/path.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:flutter/services.dart';
 
 void main() {
   runApp(const MyApp());
@@ -39,19 +45,16 @@ class _CaptureScreenState extends State<CaptureScreen> {
 
   late ImageLabeler imageLabeler;
 
-  String result = "";
+  String resultName = "";
+  String resultConfidence = "0.0";
 
   @override
   void initState() {
     // init image picker
     imagePicker = ImagePicker();
-
-    // init image labeler
-    final ImageLabelerOptions options =
-        ImageLabelerOptions(confidenceThreshold: 0.5);
-
-    imageLabeler = ImageLabeler(options: options);
-
+    // init image labeler and load model
+    loadModelFromAsset();
+    // call super
     super.initState();
   }
 
@@ -88,8 +91,6 @@ class _CaptureScreenState extends State<CaptureScreen> {
                       child: Column(
                         children: [
                           Container(
-                            // margin: EdgeInsets.all(10),
-                            // width: MediaQuery.of(context).size.width,
                             height: MediaQuery.of(context).size.height * 0.45,
                             decoration: BoxDecoration(
                               color: Colors.white,
@@ -99,29 +100,11 @@ class _CaptureScreenState extends State<CaptureScreen> {
                                       AssetImage("assets/images/noimage.png"),
                                   fit: BoxFit.cover),
                             ),
-                            // child: Image.file(_image!),
                           ),
                           const SizedBox(height: 13),
-                          const Text(
-                            'Image',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                          Padding(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 8.0),
-                            child: Text(
-                              "No Image Details To Display",
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.red.withOpacity(0.4),
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
+                          const TextAndValueWidget(
+                              title: 'Image',
+                              value: "No Image Details To Display"),
                           const SizedBox(height: 13),
                         ],
                       ),
@@ -141,50 +124,29 @@ class _CaptureScreenState extends State<CaptureScreen> {
                             // child: Image.file(_image!),
                           ),
                           const SizedBox(height: 10),
-                          const Text(
-                            'Prediction',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                          Padding(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 8.0),
-                            child: Text(
-                              result,
-                              textAlign: TextAlign.center,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                color: Colors.green,
-                                fontWeight: FontWeight.bold,
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              TextAndValueWidget(
+                                title: 'Name',
+                                value: resultName,
                               ),
-                            ),
+                              SizedBox(
+                                  width:
+                                      MediaQuery.of(context).size.width * 0.15),
+                              TextAndValueWidget(
+                                title: 'Accuracy',
+                                value:
+                                    "%${double.parse(resultConfidence) * 100}",
+                                textColor: Colors.red,
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 15),
-                          const Text(
-                            'Image',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                          Padding(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 8.0),
-                            child: Text(
-                              _image!.path,
-                              textAlign: TextAlign.center,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                color: Colors.green,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
+                          TextAndValueWidget(
+                            title: 'Image',
+                            value: _image!.path,
+                            textColor: Colors.black38,
                           ),
                           const SizedBox(height: 13),
                         ],
@@ -240,10 +202,36 @@ class _CaptureScreenState extends State<CaptureScreen> {
       final double confidence = label.confidence;
 
       setState(() {
-        result =
-            "(NAME: $text, Confidence: ${confidence.toStringAsFixed(2)})\n";
+        resultName = text;
+        resultConfidence = confidence.toStringAsFixed(2);
       });
-      print(result);
+
+      if (kDebugMode) {
+        print(
+            "(NAME: $text, Confidence: ${confidence.toStringAsFixed(1)}, INDEX: $index)");
+      }
     }
+  }
+
+  // find model path
+  Future<String> getModelPath(String asset) async {
+    final path = '${(await getApplicationSupportDirectory()).path}/$asset';
+    await Directory(dirname(path)).create(recursive: true);
+    final file = File(path);
+    if (!await file.exists()) {
+      final byteData = await rootBundle.load(asset);
+      await file.writeAsBytes(byteData.buffer
+          .asUint8List(byteData.offsetInBytes, byteData.lengthInBytes));
+    }
+    return file.path;
+  }
+
+  // initialize and load our custom model
+  Future<void> loadModelFromAsset() async {
+    final modelPath =
+        await getModelPath('assets/ml/fruits_model_metadata.tflite');
+    final options = LocalLabelerOptions(modelPath: modelPath);
+
+    imageLabeler = ImageLabeler(options: options);
   }
 }
